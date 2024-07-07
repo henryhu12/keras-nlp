@@ -20,6 +20,7 @@ from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.utils.preset_utils import CONFIG_FILE
 from keras_nlp.src.utils.preset_utils import MODEL_WEIGHTS_FILE
 from keras_nlp.src.utils.preset_utils import check_config_class
+from keras_nlp.src.utils.preset_utils import check_format
 from keras_nlp.src.utils.preset_utils import get_file
 from keras_nlp.src.utils.preset_utils import jax_memory_cleanup
 from keras_nlp.src.utils.preset_utils import list_presets
@@ -27,8 +28,8 @@ from keras_nlp.src.utils.preset_utils import list_subclasses
 from keras_nlp.src.utils.preset_utils import load_serialized_object
 from keras_nlp.src.utils.preset_utils import save_metadata
 from keras_nlp.src.utils.preset_utils import save_serialized_object
-from keras_nlp.src.utils.preset_utils import validate_metadata
 from keras_nlp.src.utils.python_utils import classproperty
+from keras_nlp.src.utils.transformers.convert import load_transformers_backbone
 
 
 @keras_nlp_export("keras_nlp.models.Backbone")
@@ -74,11 +75,7 @@ class Backbone(keras.Model):
             id(layer) for layer in self._flatten_layers()
         )
         self._initialized = True
-        if dtype is not None:
-            if isinstance(dtype, keras.DTypePolicy):
-                self.dtype_policy = dtype
-            else:
-                self.dtype_policy = keras.DTypePolicy(dtype)
+        self.dtype_policy = keras.dtype_policies.get(dtype)
 
     def __setattr__(self, name, value):
         # Work around setattr issues for Keras 2 and Keras 3 torch backend.
@@ -106,10 +103,19 @@ class Backbone(keras.Model):
     def get_config(self):
         # Don't chain to super here. `get_config()` for functional models is
         # a nested layer config and cannot be passed to Backbone constructors.
-        return {
+        config = {
             "name": self.name,
             "trainable": self.trainable,
         }
+
+        # Add quantization support by utilizing `DTypePolicyMap`
+        policy_map = keras.dtype_policies.DTypePolicyMap()
+        for layer in self._flatten_layers():
+            if layer.quantization_mode is not None:
+                policy_map[layer.path] = layer.dtype_policy
+        if len(policy_map) > 0:
+            config.update({"dtype": policy_map})
+        return config
 
     @classmethod
     def from_config(cls, config):
@@ -173,7 +179,11 @@ class Backbone(keras.Model):
         )
         ```
         """
-        validate_metadata(preset)
+        format = check_format(preset)
+
+        if format == "transformers":
+            return load_transformers_backbone(cls, preset, load_weights)
+
         preset_cls = check_config_class(preset)
         if not issubclass(preset_cls, cls):
             raise ValueError(

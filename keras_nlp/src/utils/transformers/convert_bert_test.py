@@ -1,4 +1,4 @@
-# Copyright 2021 The KerasNLP Authors
+# Copyright 2023 The KerasNLP Authors
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,12 +11,19 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import pytest
 
-import unittest
+from keras_nlp.src.models.bert.bert_classifier import BertClassifier
+from keras_nlp.src.tests.test_case import TestCase
 
-import keras_nlp
 
+class TestTask(TestCase):
+    @pytest.mark.large
+    def test_convert_tiny_preset(self):
+        model = BertClassifier.from_preset(
+            "hf://google-bert/bert-base-uncased", num_classes=2
+        )
+        prompt = "That movies was terrible."
+        model.predict([prompt])
 
-class ImportTest(unittest.TestCase):
-    def test_version(self):
-        self.assertIsNotNone(keras_nlp.__version__)
+    # TODO: compare numerics with huggingface model

@@ -14,14 +14,29 @@
 """
 Convert Gemma flax checkpoints to the Keras format.
 
+The flax checkpoint should match the directory structure here:
+https://www.kaggle.com/models/google/gemma/flax
+
+The flax directory should have a sentenepiece proto, and an inner directory with
+an orbax checkpoint:
+tokenizer.model
+2b-it/_METADATA
+2b-it/checkpoint
+2b-it/...
+
 Setup:
+```shell
 pip install -r requirements.txt
 pip install git+https://github.com/google-deepmind/gemma.git
 python pip_build.py --install
+```
 
 Usage:
+```shell
 cd tools/checkpoint_conversion
 python convert_gemma_checkpoints.py --preset gemma_2b_en
+python convert_gemma_checkpoints.py --preset new_gemma --flax_dir ./new_gemma
+```
 """
 
 import os
@@ -59,12 +74,36 @@ flags.DEFINE_string(
     required=True,
 )
 
+flags.DEFINE_string(
+    "flax_dir",
+    None,
+    "Optional path to a local flax directory to convert. See the script "
+    "docstring for more details on the format of the flax directory.",
+)
+
 
 def download_flax_model(handle):
     return kagglehub.model_download(handle)
 
 
-def convert_model(flax_config, vocab_size):
+def convert_model(flax_config, flax_params, vocab_size):
+    kwargs = {}
+    # Hack to infer Gemma 2 config options until Flax actually adds support.
+    if "post_attention_norm" in flax_params["transformer"]["layer_0"]:
+        # The 27B parameter model is the only model that does a weird
+        # query normalization.
+        is_gemma2_27b = flax_config.num_heads == 32
+        # We would like to convert these from Flax, but have no way until
+        # flax supports Gemma 2.
+        kwargs = {
+            "query_head_dim_normalize": not is_gemma2_27b,
+            "use_post_ffw_norm": True,
+            "use_post_attention_norm": True,
+            "final_logit_soft_cap": 30,
+            "attention_logit_soft_cap": 50,
+            "use_sliding_window_attention": True,
+            "sliding_window_size": 4096,
+        }
     return keras_nlp.models.GemmaBackbone(
         vocabulary_size=vocab_size,
         num_layers=flax_config.num_layers,
@@ -73,6 +112,7 @@ def convert_model(flax_config, vocab_size):
         hidden_dim=flax_config.embed_dim,
         intermediate_dim=flax_config.hidden_dim * 2,
         head_dim=flax_config.head_dim,
+        **kwargs,
     )
 
 
@@ -100,6 +140,15 @@ def convert_weights(keras_model, flax_config, flax_params):
         keras_block.pre_ffw_norm.set_weights(
             [flax_block["pre_ffw_norm"]["scale"]]
         )
+
+        if "post_attention_norm" in flax_block:
+            keras_block.post_attention_norm.set_weights(
+                [flax_block["post_attention_norm"]["scale"]]
+            )
+        if "post_ffw_norm" in flax_block:
+            keras_block.post_ffw_norm.set_weights(
+                [flax_block["post_ffw_norm"]["scale"]]
+            )
 
         keras_block.gating_ffw.set_weights(
             [flax_block["mlp"]["gating_einsum"][0]]
@@ -154,35 +203,33 @@ def validate_output(
     )
     keras_output = gemma_lm.generate([input_str], max_length=length)
     keras_output = keras_output[0]
+    print("🔶 KerasNLP output:", keras_output)
 
     # Flax
-    transformer_config = transformer_lib.TransformerConfig.from_params(
-        flax_params,
-        cache_size=length,
-    )
-    transformer = transformer_lib.Transformer(transformer_config)
-    sampler = sampler_lib.Sampler(
-        transformer=transformer,
-        vocab=flax_tokenizer,
-        params=flax_params["transformer"],
-    )
-    flax_output = sampler(
-        input_strings=[input_str],
-        total_generation_steps=length - 5,  # Length of "<bos>What is Keras?"
-    )
-    flax_output = input_str + flax_output.text[0]
-
-    # Comparing the outputs.
-    print("🔶 KerasNLP output:", keras_output)
-    print("🔶 Flax output:", flax_output)
+    try:
+        transformer_config = transformer_lib.TransformerConfig.from_params(
+            flax_params,
+            cache_size=length,
+        )
+        transformer = transformer_lib.Transformer(transformer_config)
+        sampler = sampler_lib.Sampler(
+            transformer=transformer,
+            vocab=flax_tokenizer,
+            params=flax_params["transformer"],
+        )
+        flax_output = sampler(
+            input_strings=[input_str],
+            # Length of "<bos>What is Keras?"
+            total_generation_steps=length - 5,
+        )
+        flax_output = input_str + flax_output.text[0]
+        print("🔶 Flax output:", flax_output)
+    except Exception as e:
+        print("🔶 Flax could not be run.", e)
 
 
 def main(_):
     preset = FLAGS.preset
-
-    assert (
-        preset in PRESET_MAP.keys()
-    ), f'Invalid preset {preset}. Must be one of {",".join(PRESET_MAP.keys())}'
 
     print(f"🏃 Coverting {preset}")
 
@@ -190,21 +237,35 @@ def main(_):
     # times for it). We follow suit with Keras weights.
     keras.config.set_floatx("bfloat16")
 
-    handle = PRESET_MAP[preset]
-    flax_dir = download_flax_model(handle)
+    if FLAGS.flax_dir is not None:
+        flax_dir = FLAGS.flax_dir
+    else:
+        presets = PRESET_MAP.keys()
+        assert (
+            preset in presets
+        ), f'Invalid preset {preset}. Must be one of {",".join(presets)}'
+        handle = PRESET_MAP[preset]
+        flax_dir = download_flax_model(handle)
+
     proto_path = flax_dir + "/tokenizer.model"
     print("✅ Flax model downloaded from kaggle")
 
-    variant = handle.split("/")[-1]
+    checkpoint_dir = None
+    for path in os.listdir(flax_dir):
+        checkpoint_file = os.path.join(flax_dir, path, "_METADATA")
+        if os.path.exists(checkpoint_file):
+            checkpoint_dir = os.path.join(flax_dir, path)
+    assert checkpoint_dir is not None, "Cannot find orbax checkpoint files"
+
     flax_tokenier = sentencepiece.SentencePieceProcessor()
     flax_tokenier.Load(proto_path)
-    flax_params = params_lib.load_and_format_params(flax_dir + "/" + variant)
+    flax_params = params_lib.load_and_format_params(checkpoint_dir)
     flax_config = transformer_lib.TransformerConfig.from_params(flax_params)
     print("✅ Flax model loaded")
 
     keras_tokenizer = convert_tokenizer(proto_path)
     vocab_size = keras_tokenizer.vocabulary_size()
-    keras_model = convert_model(flax_config, vocab_size)
+    keras_model = convert_model(flax_config, flax_params, vocab_size)
     print("✅ Keras model loaded")
 
     convert_weights(keras_model, flax_config, flax_params)
@@ -213,10 +274,8 @@ def main(_):
     validate_output(keras_model, keras_tokenizer, flax_params, flax_tokenier)
     print("✅ Output validated")
 
-    keras_nlp.src.utils.preset_utils.save_to_preset(keras_model, preset)
-    keras_nlp.src.utils.preset_utils.save_to_preset(
-        keras_tokenizer, preset, config_filename="tokenizer.json"
-    )
+    keras_model.save_to_preset(preset)
+    keras_tokenizer.save_to_preset(preset)
     print(f"🏁 Preset saved to ./{preset}")
 
 

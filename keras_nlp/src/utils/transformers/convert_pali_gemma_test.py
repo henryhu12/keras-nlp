@@ -11,21 +11,23 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+import numpy as np
 import pytest
 
-from keras_nlp.src.models.gemma.gemma_causal_lm import GemmaCausalLM
+from keras_nlp.src.models.pali_gemma.pali_gemma_causal_lm import (
+    PaliGemmaCausalLM,
+)
 from keras_nlp.src.tests.test_case import TestCase
 
 
 class TestTask(TestCase):
     @pytest.mark.large
     def test_convert_tiny_preset(self):
-        model = GemmaCausalLM.from_preset("hf://ariG23498/tiny-gemma-test")
-        prompt = "What is your favorite condiment?"
-        model.generate([prompt], max_length=15)
-
-        model = GemmaCausalLM.from_preset("hf://ariG23498/tiny-gemma-2-test")
-        prompt = "What is your favorite condiment?"
-        model.generate([prompt], max_length=15)
+        model = PaliGemmaCausalLM.from_preset(
+            "hf://ariG23498/tiny-pali-gemma-test"
+        )
+        image = np.random.rand(224, 224, 3)
+        prompt = "describe the image "
+        model.generate({"images": image, "prompts": prompt}, max_length=15)
 
     # TODO: compare numerics with huggingface model

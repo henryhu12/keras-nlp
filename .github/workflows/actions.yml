@@ -17,7 +17,15 @@ jobs:
       fail-fast: false
       matrix:
         backend: [tensorflow, jax, torch]
+        version: [keras-stable]
+        include:
+          - backend: jax
+            version: keras-3.1
+          - backend: jax
+            version: keras-nightly
     runs-on: ubuntu-latest
+    env:
+      KERAS_BACKEND: ${{ matrix.backend }}
     steps:
     - uses: actions/checkout@v4
     - name: Set up Python 3.9
@@ -40,11 +48,28 @@ jobs:
       run: |
           pip install -r requirements.txt --progress-bar off
           pip install --no-deps -e "." --progress-bar off
+    - name: Pin Keras 3.1
+      if: ${{ matrix.version == 'keras-3.1'}}
+      run: |
+        pip uninstall -y keras
+        pip install keras==3.1.0 --progress-bar off
+    - name: Pin Keras Nightly
+      if: ${{ matrix.version == 'keras-nightly'}}
+      run: |
+        pip uninstall -y keras
+        pip install keras-nightly --progress-bar off
     - name: Test with pytest
-      env:
-        KERAS_BACKEND: ${{ matrix.backend }}
       run: |
         pytest keras_nlp/
+    - name: Run integration tests
+      run: |
+        python pip_build.py --install
+        cd integration_tests && pytest . -k "not NoTensorflow"
+    - name: Run no tensorflow integration test
+      if: ${{ matrix.backend != 'tensorflow'}}
+      run: |
+        pip uninstall -y tensorflow-text tensorflow
+        cd integration_tests && pytest . -k "NoTensorflow"
   check_format:
     name: Check the code format
     runs-on: ubuntu-latest

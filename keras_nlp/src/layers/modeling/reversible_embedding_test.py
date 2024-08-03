@@ -24,6 +24,7 @@ from keras_nlp.src.layers.modeling.reversible_embedding import (
     ReversibleEmbedding,
 )
 from keras_nlp.src.tests.test_case import TestCase
+from keras_nlp.src.utils.keras_utils import has_quantization_support
 
 
 class ReversibleEmbeddingTest(TestCase):
@@ -39,6 +40,7 @@ class ReversibleEmbeddingTest(TestCase):
                 "output_dim": 32,
                 "tie_weights": tie_weights,
                 "embeddings_initializer": "HeNormal",
+                "logit_soft_cap": 50,
             },
             input_data=random.randint(minval=0, maxval=100, shape=(4, 10)),
             expected_output_shape=(4, 10, 32),
@@ -80,6 +82,12 @@ class ReversibleEmbeddingTest(TestCase):
         out = layer(np.array(([[1.0, 1.0]])), reverse=True)
         self.assertAllClose(out, np.array([[0.0, 4.0, 6.0]]))
 
+        layer = ReversibleEmbedding(input_dim=3, output_dim=2, logit_soft_cap=5)
+        layer.build()
+        layer.embeddings.assign(np.array([[0.0, 0.0], [2.0, 2.0], [3.0, 3.0]]))
+        out = layer(np.array(([[1.0, 1.0]])), reverse=True)
+        self.assertAllClose(out, np.array([[0.0, 3.320184, 4.168273]]))
+
     def test_reverse_dtype(self):
         embedding = ReversibleEmbedding(100, 16, reverse_dtype="float32")
         input_data = ops.ones(shape=(4, 10, 16))
@@ -103,6 +111,9 @@ class ReversibleEmbeddingTest(TestCase):
         ("tie_weights", True), ("untie_weights", False)
     )
     def test_quantize_int8(self, tie_weights):
+        if not has_quantization_support():
+            self.skipTest("This version of Keras doesn't support quantization.")
+
         layer_config = dict(
             input_dim=100, output_dim=32, tie_weights=tie_weights
         )
@@ -151,6 +162,9 @@ class ReversibleEmbeddingTest(TestCase):
         ("untie_weights", False),
     )
     def test_quantize_dtype_argument(self, tie_weights):
+        if not has_quantization_support():
+            self.skipTest("This version of Keras doesn't support quantization.")
+
         self.run_layer_test(
             cls=ReversibleEmbedding,
             init_kwargs={

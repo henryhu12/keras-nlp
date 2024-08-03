@@ -88,13 +88,6 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
         cache_update_index=None,
         training=None,
     ):
-        if (
-            hasattr(self, "_build_from_signature")
-            and hasattr(self, "_built_from_signature")
-            and not self._built_from_signature
-        ):
-            self._build_from_signature(query=query, value=value, key=key)
-
         if key is None:
             key = value
 
@@ -129,21 +122,14 @@ class CachedMultiHeadAttention(keras.layers.MultiHeadAttention):
             key = self._key_dense(key)
             value = self._value_dense(value)
 
-        query = ops.multiply(
-            query,
-            1.0 / ops.sqrt(ops.cast(self._key_dim, query.dtype)),
-        )
-        attention_scores = ops.einsum(self._dot_product_equation, key, query)
-        attention_scores = self._masked_softmax(
-            attention_scores, attention_mask
-        )
-        attention_scores = self._dropout_layer(
-            attention_scores, training=training
+        attention_output, attention_scores = self._compute_attention(
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=attention_mask,
+            training=training,
         )
 
-        attention_output = ops.einsum(
-            self._combine_equation, attention_scores, value
-        )
         attention_output = self._output_dense(attention_output)
 
         if cache is not None:

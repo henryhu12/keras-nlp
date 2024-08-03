@@ -14,17 +14,16 @@
 
 import sys
 
+import keras
+from absl import logging
+from packaging.version import parse
+
+from keras_nlp.src.utils.tensor_utils import is_tensor_type
+
 try:
     import tensorflow as tf
 except ImportError:
-    raise ImportError(
-        "To use `keras_nlp`, please install Tensorflow: `pip install tensorflow`. "
-        "The TensorFlow package is required for data preprocessing with any backend."
-    )
-import keras
-from absl import logging
-
-from keras_nlp.src.utils.tensor_utils import is_tensor_type
+    tf = None
 
 
 def clone_initializer(initializer):
@@ -104,3 +103,15 @@ def print_msg(message, line_break=True):
 @keras.saving.register_keras_serializable(package="keras_nlp")
 def gelu_approximate(x):
     return keras.activations.gelu(x, approximate=True)
+
+
+def has_quantization_support():
+    return False if parse(keras.version()) < parse("3.4.0") else True
+
+
+def assert_quantization_support():
+    if not has_quantization_support():
+        raise ValueError(
+            "Quantization API requires Keras >= 3.4.0 to function "
+            f"correctly. Received: '{keras.version()}'"
+        )

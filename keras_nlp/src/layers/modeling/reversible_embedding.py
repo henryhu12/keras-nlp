@@ -14,8 +14,10 @@
 
 import keras
 from keras import ops
+from packaging.version import parse
 
 from keras_nlp.src.api_export import keras_nlp_export
+from keras_nlp.src.utils.keras_utils import assert_quantization_support
 
 
 @keras_nlp_export("keras_nlp.layers.ReversibleEmbedding")
@@ -50,6 +52,10 @@ class ReversibleEmbedding(keras.layers.Embedding):
             "padding" value that should be masked out.
         reverse_dtype: The dtype for the reverse projection computation.
             Defaults to the `compute_dtype` of the layer.
+        logit_soft_cap: If `logit_soft_cap` is set and `reverse=True`, the
+            output logits will be scaled by
+            `tanh(logits / logit_soft_cap) * logit_soft_cap`. This narrows the
+            range of output logits and can improve training.
         **kwargs: other keyword arguments passed to `keras.layers.Embedding`,
             including `name`, `trainable`, `dtype` etc.
 
@@ -91,6 +97,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         embeddings_constraint=None,
         mask_zero=False,
         reverse_dtype=None,
+        logit_soft_cap=None,
         **kwargs,
     ):
         super().__init__(
@@ -104,10 +111,14 @@ class ReversibleEmbedding(keras.layers.Embedding):
         )
         self.tie_weights = tie_weights
         self.reverse_dtype = reverse_dtype
+        self.logit_soft_cap = logit_soft_cap
 
     def build(self, inputs_shape=None):
         super().build(inputs_shape)
-        if not self.tie_weights and self.quantization_mode != "int8":
+        if (
+            not self.tie_weights
+            and getattr(self, "quantization_mode", None) != "int8"
+        ):
             self.reverse_embeddings = self.add_weight(
                 name="reverse_embeddings",
                 shape=(self.output_dim, self.input_dim),
@@ -124,7 +135,12 @@ class ReversibleEmbedding(keras.layers.Embedding):
             if self.reverse_dtype is not None:
                 inputs = ops.cast(inputs, self.reverse_dtype)
                 kernel = ops.cast(kernel, self.reverse_dtype)
-            return ops.matmul(inputs, kernel)
+            logits = ops.matmul(inputs, kernel)
+            # Optionally soft-cap logits.
+            if self.logit_soft_cap is not None:
+                soft_cap = self.logit_soft_cap
+                logits = ops.tanh(logits / soft_cap) * soft_cap
+            return logits
 
         return super().call(inputs)
 
@@ -134,6 +150,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             {
                 "tie_weights": self.tie_weights,
                 "reverse_dtype": self.reverse_dtype,
+                "logit_soft_cap": self.logit_soft_cap,
             }
         )
         return config
@@ -142,11 +159,15 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.built:
             return
         super().save_own_variables(store)
+        # Before Keras 3.2, the reverse weight is saved in the super() call.
+        # After Keras 3.2, the reverse weight must be saved manually.
+        if parse(keras.version()) < parse("3.2.0"):
+            return
         target_variables = []
         if not self.tie_weights:
             # Store the reverse embedding weights as the last weights.
             target_variables.append(self.reverse_embeddings)
-            if self.quantization_mode == "int8":
+            if getattr(self, "quantization_mode", None) == "int8":
                 target_variables.append(self.reverse_embeddings_scale)
             for i, variable in enumerate(target_variables, start=len(store)):
                 store[str(i)] = variable
@@ -158,7 +179,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
         if not self.tie_weights:
             # Last weights in the stores are the reverse embedding weights.
             target_variables = [self.reverse_embeddings]
-            if self.quantization_mode == "int8":
+            if getattr(self, "quantization_mode", None) == "int8":
                 target_variables.append(self.reverse_embeddings_scale)
             for i, variable in enumerate(
                 target_variables, start=len(store) - len(target_variables)
@@ -171,7 +192,7 @@ class ReversibleEmbedding(keras.layers.Embedding):
             output_shape[-1] = self.input_dim
         else:
             output_shape += [self.output_dim]
-        return keras.KerasTensor(output_shape, dtype=self.dtype)
+        return keras.KerasTensor(output_shape, dtype=self.compute_dtype)
 
     # Quantization-related (int8) methods
 
@@ -218,37 +239,51 @@ class ReversibleEmbedding(keras.layers.Embedding):
                 kernel = self.reverse_embeddings
                 scale = self.reverse_embeddings_scale
             inputs, inputs_scale = self.inputs_quantizer(inputs)
-            outputs = ops.matmul(inputs, kernel)
+            logits = ops.matmul(inputs, kernel)
             # De-scale outputs
-            outputs = ops.cast(outputs, self.compute_dtype)
-            outputs = ops.divide(outputs, ops.multiply(inputs_scale, scale))
-            return outputs
+            logits = ops.cast(logits, self.compute_dtype)
+            logits = ops.divide(logits, ops.multiply(inputs_scale, scale))
+            # Optionally soft-cap logits.
+            if self.logit_soft_cap is not None:
+                soft_cap = self.logit_soft_cap
+                logits = ops.tanh(logits / soft_cap) * soft_cap
+            return logits
 
         return super()._int8_call(inputs)
 
-    def quantize(self, mode):
+    def quantize(self, mode, type_check=True):
         import gc
+        import inspect
 
-        if type(self) is not ReversibleEmbedding:
+        assert_quantization_support()
+        if type_check and type(self) is not ReversibleEmbedding:
             raise NotImplementedError(
                 f"Layer {self.__class__.__name__} does not have a `quantize()` "
                 "method implemented."
             )
         self._check_quantize_args(mode, self.compute_dtype)
 
+        def abs_max_quantize(inputs, axis):
+            sig = inspect.signature(keras.quantizers.abs_max_quantize)
+            if "to_numpy" in sig.parameters:
+                return keras.quantizers.abs_max_quantize(
+                    inputs, axis=axis, to_numpy=True
+                )
+            else:
+                # `keras<=3.4.1` doesn't support `to_numpy`
+                return keras.quantizers.abs_max_quantize(inputs, axis=axis)
+
         self._tracker.unlock()
         if mode == "int8":
-            embeddings, embeddings_scale = keras.quantizers.abs_max_quantize(
+            embeddings, embeddings_scale = abs_max_quantize(
                 self._embeddings, axis=-1
             )
             embeddings_scale = ops.squeeze(embeddings_scale, axis=-1)
             self._untrack_variable(self._embeddings)
             del self._embeddings
             if not self.tie_weights:
-                reverse_embeddings, reverse_embeddings_scale = (
-                    keras.quantizers.abs_max_quantize(
-                        self.reverse_embeddings, axis=0
-                    )
+                reverse_embeddings, reverse_embeddings_scale = abs_max_quantize(
+                    self.reverse_embeddings, axis=0
                 )
                 reverse_embeddings_scale = ops.squeeze(
                     reverse_embeddings_scale, axis=0

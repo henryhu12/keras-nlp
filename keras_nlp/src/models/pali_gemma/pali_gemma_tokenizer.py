@@ -13,9 +13,17 @@
 # limitations under the License.
 from keras_nlp.src.api_export import keras_nlp_export
 from keras_nlp.src.models.gemma.gemma_preprocessor import GemmaTokenizer
+from keras_nlp.src.models.pali_gemma.pali_gemma_backbone import (
+    PaliGemmaBackbone,
+)
 
 
-@keras_nlp_export("keras_nlp.models.PaliGemmaTokenizer")
+@keras_nlp_export(
+    [
+        "keras_nlp.tokenizers.PaliGemmaTokenizer",
+        "keras_nlp.models.PaliGemmaTokenizer",
+    ]
+)
 class PaliGemmaTokenizer(GemmaTokenizer):
     """PaliGemma tokenizer layer based on SentencePiece.
 
@@ -76,4 +84,4 @@ class PaliGemmaTokenizer(GemmaTokenizer):
     ```
     """
 
-    pass
+    backbone_cls = PaliGemmaBackbone

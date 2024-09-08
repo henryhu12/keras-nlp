@@ -22,6 +22,7 @@ from keras_nlp.src.models.preprocessor import Preprocessor
 from keras_nlp.src.models.whisper.whisper_audio_feature_extractor import (
     WhisperAudioFeatureExtractor,
 )
+from keras_nlp.src.models.whisper.whisper_backbone import WhisperBackbone
 from keras_nlp.src.models.whisper.whisper_tokenizer import WhisperTokenizer
 from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
@@ -148,6 +149,7 @@ class WhisperPreprocessor(Preprocessor):
     ```
     """
 
+    backbone_cls = WhisperBackbone
     tokenizer_cls = WhisperTokenizer
 
     def __init__(
@@ -201,10 +203,11 @@ class WhisperPreprocessor(Preprocessor):
 
             bos_tokens += [self.tokenizer.language_tokens[self.language]]
 
+            special_token_dict = self.tokenizer._special_token_dict
             if self.task == "transcribe":
-                bos_tokens += [self.tokenizer.special_tokens["<|transcribe|>"]]
+                bos_tokens += [special_token_dict["<|transcribe|>"]]
             elif self.task == "translate":
-                bos_tokens += [self.tokenizer.special_tokens["<|translate|>"]]
+                bos_tokens += [special_token_dict["<|translate|>"]]
         else:
             if self.language is not None:
                 logging.info(

@@ -31,8 +31,8 @@ from keras_nlp.src.tokenizers import tokenizer
 from keras_nlp.src.utils.tensor_utils import convert_to_ragged_batch
 from keras_nlp.src.utils.tensor_utils import is_int_dtype
 from keras_nlp.src.utils.tensor_utils import is_string_dtype
+from keras_nlp.src.utils.tensor_utils import preprocessing_function
 from keras_nlp.src.utils.tensor_utils import tensor_to_list
-from keras_nlp.src.utils.tensor_utils import tf_preprocessing_function
 
 try:
     import tensorflow_text as tf_text
@@ -67,6 +67,9 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             for more details on the format.
         sequence_length: If set, the output will be converted to a dense
             tensor and padded/trimmed so all outputs are of `sequence_length`.
+        add_bos: Add beginning of sentence token to the result.
+        add_eos: Add end of sentence token to the result. Token is always
+            truncated if output is longer than specified `sequence_length`.
 
     References:
         - [Kudo and Richardson, 2018](https://arxiv.org/abs/1808.06226)
@@ -116,6 +119,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         proto=None,
         sequence_length=None,
         dtype="int32",
+        add_bos=False,
+        add_eos=False,
         **kwargs,
     ) -> None:
         if not is_int_dtype(dtype) and not is_string_dtype(dtype):
@@ -128,6 +133,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
 
         self.proto = None
         self.sequence_length = sequence_length
+        self.add_bos = add_bos
+        self.add_eos = add_eos
         self.set_proto(proto)
         self.file_assets = [VOCAB_FILENAME]
 
@@ -172,6 +179,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
         self._sentence_piece = tf_text.SentencepieceTokenizer(
             model=proto_bytes,
             out_type=self.compute_dtype,
+            add_bos=self.add_bos,
+            add_eos=self.add_eos,
         )
         # Keras cannot serialize a bytestring, so we base64 encode the model
         # byte array as a string for saving.
@@ -213,6 +222,8 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             {
                 "proto": None,  # Save vocabulary via an asset!
                 "sequence_length": self.sequence_length,
+                "add_bos": self.add_bos,
+                "add_eos": self.add_eos,
             }
         )
         return config
@@ -224,7 +235,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
                 "sure to pass a `proto` argument when creating the layer."
             )
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def tokenize(self, inputs):
         self._check_vocabulary()
         unbatched = inputs.shape.rank == 0
@@ -251,7 +262,7 @@ class SentencePieceTokenizer(tokenizer.Tokenizer):
             tf.ensure_shape(tokens, shape=[self.sequence_length])
         return tokens
 
-    @tf_preprocessing_function
+    @preprocessing_function
     def detokenize(self, inputs):
         self._check_vocabulary()
         inputs, unbatched, rectangular = convert_to_ragged_batch(inputs)

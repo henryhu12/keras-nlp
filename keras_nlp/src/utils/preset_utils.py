@@ -60,6 +60,8 @@ TOKENIZER_ASSET_DIR = "assets/tokenizer"
 # Config file names.
 CONFIG_FILE = "config.json"
 TOKENIZER_CONFIG_FILE = "tokenizer.json"
+AUDIO_CONVERTER_CONFIG_FILE = "audio_converter.json"
+IMAGE_CONVERTER_CONFIG_FILE = "image_converter.json"
 TASK_CONFIG_FILE = "task.json"
 PREPROCESSOR_CONFIG_FILE = "preprocessor.json"
 METADATA_FILE = "metadata.json"
@@ -77,10 +79,10 @@ SAFETENSOR_FILE = "model.safetensors"
 
 # Global state for preset registry.
 BUILTIN_PRESETS = {}
-BUILTIN_PRESETS_FOR_CLASS = collections.defaultdict(dict)
+BUILTIN_PRESETS_FOR_BACKBONE = collections.defaultdict(dict)
 
 
-def register_presets(presets, classes):
+def register_presets(presets, backbone_cls):
     """Register built-in presets for a set of classes.
 
     Note that this is intended only for models and presets shipped in the
@@ -88,13 +90,20 @@ def register_presets(presets, classes):
     """
     for preset in presets:
         BUILTIN_PRESETS[preset] = presets[preset]
-        for cls in classes:
-            BUILTIN_PRESETS_FOR_CLASS[cls][preset] = presets[preset]
+        BUILTIN_PRESETS_FOR_BACKBONE[backbone_cls][preset] = presets[preset]
 
 
-def list_presets(cls):
+def builtin_presets(cls):
     """Find all registered built-in presets for a class."""
-    return dict(BUILTIN_PRESETS_FOR_CLASS[cls])
+    presets = {}
+    if cls in BUILTIN_PRESETS_FOR_BACKBONE:
+        presets.update(BUILTIN_PRESETS_FOR_BACKBONE[cls])
+    backbone_cls = getattr(cls, "backbone_cls", None)
+    if backbone_cls:
+        presets.update(builtin_presets(backbone_cls))
+    for subclass in list_subclasses(cls):
+        presets.update(builtin_presets(subclass))
+    return presets
 
 
 def list_subclasses(cls):
@@ -656,7 +665,15 @@ class PresetLoader:
         """Load a tokenizer layer from the preset."""
         raise NotImplementedError
 
-    def load_task(self, cls, load_weights, **kwargs):
+    def load_audio_converter(self, cls, **kwargs):
+        """Load an audio converter layer from the preset."""
+        raise NotImplementedError
+
+    def load_image_converter(self, cls, **kwargs):
+        """Load an image converter layer from the preset."""
+        raise NotImplementedError
+
+    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         """Load a task model from the preset.
 
         By default, we create a task from a backbone and preprocessor with
@@ -671,7 +688,7 @@ class PresetLoader:
             )
         if "preprocessor" not in kwargs:
             kwargs["preprocessor"] = self.load_preprocessor(
-                cls.preprocessor_cls
+                cls.preprocessor_cls,
             )
         return cls(**kwargs)
 
@@ -682,8 +699,16 @@ class PresetLoader:
         arguments. This allow us to support transformers checkpoints by
         only converting the backbone and tokenizer.
         """
-        if "tokenizer" not in kwargs:
+        if "tokenizer" not in kwargs and cls.tokenizer_cls:
             kwargs["tokenizer"] = self.load_tokenizer(cls.tokenizer_cls)
+        if "audio_converter" not in kwargs and cls.audio_converter_cls:
+            kwargs["audio_converter"] = self.load_audio_converter(
+                cls.audio_converter_cls
+            )
+        if "image_converter" not in kwargs and cls.image_converter_cls:
+            kwargs["image_converter"] = self.load_image_converter(
+                cls.image_converter_cls
+            )
         return cls(**kwargs)
 
 
@@ -704,23 +729,38 @@ class KerasPresetLoader(PresetLoader):
         tokenizer.load_preset_assets(self.preset)
         return tokenizer
 
-    def load_task(self, cls, load_weights, **kwargs):
+    def load_audio_converter(self, cls, **kwargs):
+        converter_config = load_json(self.preset, AUDIO_CONVERTER_CONFIG_FILE)
+        return load_serialized_object(converter_config, **kwargs)
+
+    def load_image_converter(self, cls, **kwargs):
+        converter_config = load_json(self.preset, IMAGE_CONVERTER_CONFIG_FILE)
+        return load_serialized_object(converter_config, **kwargs)
+
+    def load_task(self, cls, load_weights, load_task_weights, **kwargs):
         # If there is no `task.json` or it's for the wrong class delegate to the
         # super class loader.
         if not check_file_exists(self.preset, TASK_CONFIG_FILE):
-            return super().load_task(cls, load_weights, **kwargs)
+            return super().load_task(
+                cls, load_weights, load_task_weights, **kwargs
+            )
         task_config = load_json(self.preset, TASK_CONFIG_FILE)
         if not issubclass(check_config_class(task_config), cls):
-            return super().load_task(cls, load_weights, **kwargs)
+            return super().load_task(
+                cls, load_weights, load_task_weights, **kwargs
+            )
         # We found a `task.json` with a complete config for our class.
         task = load_serialized_object(task_config, **kwargs)
         if task.preprocessor is not None:
             task.preprocessor.tokenizer.load_preset_assets(self.preset)
         if load_weights:
-            jax_memory_cleanup(task)
-            if check_file_exists(self.preset, TASK_WEIGHTS_FILE):
+            has_task_weights = check_file_exists(self.preset, TASK_WEIGHTS_FILE)
+            if has_task_weights and load_task_weights:
+                jax_memory_cleanup(task)
                 task_weights = get_file(self.preset, TASK_WEIGHTS_FILE)
                 task.load_task_weights(task_weights)
+            else:
+                jax_memory_cleanup(task.backbone)
             backbone_weights = get_file(self.preset, MODEL_WEIGHTS_FILE)
             task.backbone.load_weights(backbone_weights)
         return task

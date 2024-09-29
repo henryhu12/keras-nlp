@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import copy
 import os
 
@@ -22,7 +8,7 @@ import tensorflow as tf
 from transformers import TFXLNetModel
 from transformers import XLNetTokenizer
 
-from keras_nlp.models import XLNetBackbone
+from keras_hub.models import XLNetBackbone
 
 check_mems = False
 
@@ -55,7 +41,7 @@ del tokenized_knlp["attention_mask"]
 del tokenized_knlp["input_ids"]
 del tokenized_knlp["token_type_ids"]
 
-# create keras_nlp model
+# create keras_hub model
 knlp_model = XLNetBackbone(
     vocabulary_size=hf_model.config.vocab_size,
     num_layers=hf_model.config.n_layer,
@@ -65,7 +51,7 @@ knlp_model = XLNetBackbone(
     dropout=0.0,
     kernel_initializer_range=hf_model.config.initializer_range,
 )
-# Load weights for keras_nlp model
+# Load weights for keras_hub model
 file_hf = h5py.File("./tf_weights.h5", "r")
 
 try:

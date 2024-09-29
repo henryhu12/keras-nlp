@@ -29,17 +29,10 @@ export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/local/cuda/lib64:/usr/local/cuda/e
 nvidia-smi
 nvcc --version
 
-cd "src/github/keras-nlp"
+cd "src/github/keras-hub"
 pip install -U pip setuptools psutil
 
-if [ "${KERAS2:-0}" == "1" ]
-then
-   echo "Keras2 detected."
-   pip install -r requirements-common.txt --progress-bar off --timeout 1000
-   pip install tensorflow-text==2.15 tensorflow[and-cuda]~=2.15 keras-core \
-      --timeout 1000
-
-elif [ "$KERAS_BACKEND" == "tensorflow" ]
+if [ "$KERAS_BACKEND" == "tensorflow" ]
 then
    echo "TensorFlow backend detected."
    pip install -r requirements-tensorflow-cuda.txt --progress-bar off \
@@ -62,9 +55,9 @@ pip install huggingface_hub
 # Run Extra Large Tests for Continuous builds
 if [ "${RUN_XLARGE:-0}" == "1" ]
 then
-   pytest keras_nlp --check_gpu --run_large --run_extra_large \
-      --cov=keras-nlp
+   pytest keras_hub --check_gpu --run_large --run_extra_large \
+      --cov=keras-hub
 else
-   pytest keras_nlp --check_gpu --run_large \
-      --cov=keras-nlp
+   pytest keras_hub --check_gpu --run_large \
+      --cov=keras-hub
 fi

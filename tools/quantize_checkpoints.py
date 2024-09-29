@@ -1,16 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """
 Quantize preset checkpoints with dynamic int8 and optionally upload the quantized preset.
 
@@ -24,7 +11,7 @@ import keras
 from absl import app
 from absl import flags
 
-import keras_nlp
+import keras_hub
 
 FLAGS = flags.FLAGS
 
@@ -32,7 +19,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string(
     "preset",
     None,
-    "Must be a valid `CausalLM` preset from KerasNLP",
+    "Must be a valid `CausalLM` preset from KerasHub",
     required=True,
 )
 flags.DEFINE_string(
@@ -49,7 +36,7 @@ def validate_output(causal_lm):
 
     keras_output = causal_lm.generate([input_str], max_length=length)
     keras_output = keras_output[0]
-    print("🔶 KerasNLP output:", keras_output)
+    print("🔶 KerasHub output:", keras_output)
 
 
 def main(_):
@@ -59,7 +46,7 @@ def main(_):
 
     keras.config.set_floatx("bfloat16")
 
-    causal_lm = keras_nlp.models.CausalLM.from_preset(preset, dtype="bfloat16")
+    causal_lm = keras_hub.models.CausalLM.from_preset(preset, dtype="bfloat16")
     backbone = causal_lm.backbone
     tokenizer = causal_lm.preprocessor.tokenizer
 
@@ -76,7 +63,7 @@ def main(_):
     print(f"🏁 Preset saved to ./{quantized_preset}")
 
     if upload_uri:
-        keras_nlp.upload_preset(uri=upload_uri, preset=quantized_preset)
+        keras_hub.upload_preset(uri=upload_uri, preset=quantized_preset)
         print(f"🏁 Preset uploaded to {upload_uri}")
 
 

@@ -1,16 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 import json
 import os
 
@@ -19,8 +6,8 @@ import tensorflow as tf
 from transformers import AutoTokenizer
 from transformers import GPTNeoXModel
 
-from keras_nlp.models import GPTNeoXBackbone
-from keras_nlp.models import GPTNeoXTokenizer
+from keras_hub.models import GPTNeoXBackbone
+from keras_hub.models import GPTNeoXTokenizer
 
 PRESET_NAME = "pythia-70m"
 BASE_MODEL = "EleutherAI/gpt-neox-20b"

@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import contextlib
 import os
 
@@ -20,7 +6,7 @@ import transformers
 from absl import app
 from absl import flags
 
-import keras_nlp
+import keras_hub
 
 os.environ["KERAS_BACKEND"] = "torch"
 
@@ -134,28 +120,28 @@ def _set_default_tensor_type(dtype: torch.dtype):
 def convert_checkpoints(preset, weights_file, size, output_dir, vocab_path):
     if preset is not None:
         hf_id = PRESET_MAP[preset]
-        print(f"\n-> Loading KerasNLP Gemma model with preset `{preset}`...")
-        keras_nlp_model = keras_nlp.models.GemmaCausalLM.from_preset(preset)
+        print(f"\n-> Loading KerasHub Gemma model with preset `{preset}`...")
+        keras_hub_model = keras_hub.models.GemmaCausalLM.from_preset(preset)
     else:
         hf_id, keras_preset = SIZE_MAP[size.lower()]
         print(f"\n-> Loading Keras weights from file `{weights_file}`...")
-        keras_nlp_model = keras_nlp.models.GemmaCausalLM.from_preset(
+        keras_hub_model = keras_hub.models.GemmaCausalLM.from_preset(
             keras_preset
         )
-        keras_nlp_model.load_weights(weights_file)
+        keras_hub_model.load_weights(weights_file)
 
     print(f"\n-> Loading HuggingFace Gemma `{size.upper()}` model...")
     hf_model = transformers.GemmaForCausalLM(CONFIG_MAPPING[size.lower()])
 
     print("\n✅ Model loading complete.")
-    print("\n-> Converting weights from KerasNLP Gemma to HuggingFace Gemma...")
+    print("\n-> Converting weights from KerasHub Gemma to HuggingFace Gemma...")
 
     # Token embedding (with vocab size difference handling)
-    keras_embedding = keras_nlp_model.backbone.token_embedding.weights[0]
+    keras_embedding = keras_hub_model.backbone.token_embedding.weights[0]
     hf_vocab_size = hf_model.model.embed_tokens.weight.shape[0]
-    keras_nlp_vocab_size = keras_embedding.value.shape[0]
-    if hf_vocab_size < keras_nlp_vocab_size:
-        diff = keras_nlp_vocab_size - hf_vocab_size
+    keras_hub_vocab_size = keras_embedding.value.shape[0]
+    if hf_vocab_size < keras_hub_vocab_size:
+        diff = keras_hub_vocab_size - hf_vocab_size
         update_state_dict(
             hf_model.model.embed_tokens,
             "weight",
@@ -169,8 +155,8 @@ def convert_checkpoints(preset, weights_file, size, output_dir, vocab_path):
         )
 
     # Decoder blocks
-    for i in range(keras_nlp_model.backbone.num_layers):
-        decoder_block = keras_nlp_model.backbone.get_layer(f"decoder_block_{i}")
+    for i in range(keras_hub_model.backbone.num_layers):
+        decoder_block = keras_hub_model.backbone.get_layer(f"decoder_block_{i}")
 
         # Pre-attention norm
         update_state_dict(
@@ -247,7 +233,7 @@ def convert_checkpoints(preset, weights_file, size, output_dir, vocab_path):
     update_state_dict(
         hf_model.model.norm,
         "weight",
-        keras_nlp_model.backbone.layers[-1].weights[0].value,
+        keras_hub_model.backbone.layers[-1].weights[0].value,
     )
 
     print("\n✅ Weights converted successfully.")
@@ -264,14 +250,14 @@ def convert_checkpoints(preset, weights_file, size, output_dir, vocab_path):
     if not vocab_path:
         tokenizer_preset = preset or SIZE_MAP[size.lower()]
         print(
-            "\n-> Loading KerasNLP Gemma tokenizer with "
+            "\n-> Loading KerasHub Gemma tokenizer with "
             f"preset `{tokenizer_preset}`..."
         )
-        keras_nlp_tokenizer = keras_nlp.models.GemmaTokenizer.from_preset(
+        keras_hub_tokenizer = keras_hub.models.GemmaTokenizer.from_preset(
             tokenizer_preset
         )
         # Save tokenizer state
-        keras_nlp_tokenizer.save_assets(output_dir)
+        keras_hub_tokenizer.save_assets(output_dir)
         vocab_path = os.path.join(output_dir, "vocabulary.spm")
         print("\n✅ Tokenizer loading complete.")
 

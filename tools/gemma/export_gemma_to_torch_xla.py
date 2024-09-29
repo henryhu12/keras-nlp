@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """
 Prior to running this conversion script, please install the PyTorch
 implementation of Gemma and `torch_xla`:
@@ -33,7 +19,7 @@ from absl import app
 from absl import flags
 from gemma import model_xla as gemma_model
 
-import keras_nlp
+import keras_hub
 
 os.environ["KERAS_BACKEND"] = "torch"
 
@@ -66,7 +52,7 @@ Following this usage, you can run the verification script to confirm
 functionality of the converted checkpoint:
 
 ```
-python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+python keras-hub-gemma/tools/gemma/run_gemma_xla.py \
   --size 2b \
   --checkpoint_file fine_tuned_imdb.ckpt \
   --vocab_file gemma_tokenizer/vocabulary.spm \
@@ -146,8 +132,8 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
         model = gemma_model.GemmaForCausalLM(
             PRESET_MAP[preset], world_size=1, rank=0, device=device
         )
-        print(f"\n-> Loading KerasNLP Gemma model with preset `{preset}`...")
-        keras_nlp_model = keras_nlp.models.GemmaCausalLM.from_preset(preset)
+        print(f"\n-> Loading KerasHub Gemma model with preset `{preset}`...")
+        keras_hub_model = keras_hub.models.GemmaCausalLM.from_preset(preset)
     else:
         print(f"\n-> Loading PyTorch Gemma model config for `{size}` model...")
         config, size_preset = SIZE_MAP[size.lower()]
@@ -155,20 +141,20 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
             config, world_size=1, rank=0, device=device
         )
         print(f"\n-> Loading Keras weights from file `{weights_file}`...")
-        keras_nlp_model = keras_nlp.models.GemmaCausalLM.from_preset(
+        keras_hub_model = keras_hub.models.GemmaCausalLM.from_preset(
             size_preset
         )
-        keras_nlp_model.load_weights(weights_file)
+        keras_hub_model.load_weights(weights_file)
 
     print("\n✅ Model loading complete.")
-    print("\n-> Converting weights from KerasNLP Gemma to PyTorch Gemma...")
+    print("\n-> Converting weights from KerasHub Gemma to PyTorch Gemma...")
 
     # Token embedding (with vocab size difference handling)
-    keras_embedding = keras_nlp_model.backbone.token_embedding.weights[0]
+    keras_embedding = keras_hub_model.backbone.token_embedding.weights[0]
     torch_vocab_size = model.embedder.weight.shape[0]
-    keras_nlp_vocab_size = keras_embedding.value.shape[0]
-    if torch_vocab_size < keras_nlp_vocab_size:
-        diff = keras_nlp_vocab_size - torch_vocab_size
+    keras_hub_vocab_size = keras_embedding.value.shape[0]
+    if torch_vocab_size < keras_hub_vocab_size:
+        diff = keras_hub_vocab_size - torch_vocab_size
         update_state_dict(
             model.embedder,
             "weight",
@@ -182,8 +168,8 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
         )
 
     # Decoder blocks
-    for i in range(keras_nlp_model.backbone.num_layers):
-        decoder_block = keras_nlp_model.backbone.get_layer(f"decoder_block_{i}")
+    for i in range(keras_hub_model.backbone.num_layers):
+        decoder_block = keras_hub_model.backbone.get_layer(f"decoder_block_{i}")
         # Pre-attention norm
         update_state_dict(
             model.model.layers[i].input_layernorm,
@@ -246,7 +232,7 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
     update_state_dict(
         model.model.norm,
         "weight",
-        keras_nlp_model.backbone.layers[-1].weights[0].value,
+        keras_hub_model.backbone.layers[-1].weights[0].value,
     )
 
     print("\n✅ Weights converted successfully.")
@@ -262,9 +248,9 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
     if preset is not None:
         # Tokenizer
         print(
-            f"\n-> Loading KerasNLP Gemma tokenizer with preset `{preset}`..."
+            f"\n-> Loading KerasHub Gemma tokenizer with preset `{preset}`..."
         )
-        keras_nlp_tokenizer = keras_nlp.models.GemmaTokenizer.from_preset(
+        keras_hub_tokenizer = keras_hub.models.GemmaTokenizer.from_preset(
             preset
         )
         print("\n✅ Model loading complete.")
@@ -272,7 +258,7 @@ def convert_checkpoints(preset, weights_file, size, output_file, vocab_dir):
 
         # Save tokenizer state
         os.makedirs(vocab_dir, exist_ok=True)
-        keras_nlp_tokenizer.save_assets(vocab_dir)
+        keras_hub_tokenizer.save_assets(vocab_dir)
 
         print(
             "\n✅ Saving complete. Tokenizer state "

@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """
 This is a modified version of `run_xla.py` script in the PyTorch Gemma repo
 to ensure proper functionality after porting checkpoints from Keras. Please
@@ -53,7 +39,7 @@ Run the verification script supplying your model size, converted checkpoint file
 vocabulary file, and test prompt.
 
 ```
-python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+python keras-hub-gemma/tools/gemma/run_gemma_xla.py \
   --size 2b \
   --checkpoint_file fine_tuned_imdb.ckpt \
   --vocab_file gemma_tokenizer/vocabulary.spm \
@@ -72,7 +58,7 @@ If running from a preset, instead provide your converted checkpoint file and
 the associated preset name:
 
 ```
-python keras-nlp-gemma/tools/gemma/run_gemma_xla.py \
+python keras-hub-gemma/tools/gemma/run_gemma_xla.py \
     --preset gemma_2b_en \
     --checkpoint_file gemma_2b.ckpt \
     --prompt "California is the largest"

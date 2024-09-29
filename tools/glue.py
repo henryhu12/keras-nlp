@@ -1,16 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
 """TODO: This is written for tf.distribute. We should rewrite for Jax."""
 
 import csv
@@ -23,7 +10,7 @@ from absl import app
 from absl import flags
 from tensorflow import keras
 
-import keras_nlp
+import keras_hub
 
 FLAGS = flags.FLAGS
 
@@ -228,7 +215,7 @@ def main(_):
     train_ds, test_ds, val_ds, idx_order = load_data(FLAGS.task_name)
     # ----- Custom code block starts -----
     bert_preprocessor = (
-        keras_nlp.models.BertTextClassifierPreprocessor.from_preset(
+        keras_hub.models.BertTextClassifierPreprocessor.from_preset(
             "bert_base_en_uncased"
         )
     )
@@ -272,10 +259,10 @@ def main(_):
             # Commonly the classifier is simply your model + several dense layers,
             # please refer to "Make the Finetuning Model" section in README for
             # detailed instructions.
-            bert_model = keras_nlp.models.BertBackbone.from_preset(
+            bert_model = keras_hub.models.BertBackbone.from_preset(
                 "bert_base_en_uncased"
             )
-            finetuning_model = keras_nlp.models.BertTextClassifier(
+            finetuning_model = keras_hub.models.BertTextClassifier(
                 backbone=bert_model,
                 num_classes=num_classes,
             )

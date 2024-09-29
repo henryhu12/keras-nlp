@@ -1,17 +1,3 @@
-# Copyright 2024 The KerasNLP Authors
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 import argparse
 import gc
 import json
@@ -26,10 +12,10 @@ import keras  # noqa: E402
 import torch  # noqa: E402
 import transformers  # noqa: E402
 
-from keras_nlp import upload_preset  # noqa: E402
-from keras_nlp.src.models import Phi3Backbone  # noqa: E402
-from keras_nlp.src.models import Phi3Preprocessor  # noqa: E402
-from keras_nlp.src.models import Phi3Tokenizer  # noqa: E402
+from keras_hub import upload_preset  # noqa: E402
+from keras_hub.src.models import Phi3Backbone  # noqa: E402
+from keras_hub.src.models import Phi3Preprocessor  # noqa: E402
+from keras_hub.src.models import Phi3Tokenizer  # noqa: E402
 
 PRESET_MAP = {
     "phi3_mini_4k_instruct_en": "microsoft/Phi-3-mini-4k-instruct",
@@ -226,7 +212,7 @@ def validate_output(
 
     hf_model_outputs = hf_model(**hf_model_input)[0]
 
-    # KerasNLP
+    # KerasHub
     keras_model_input = keras_preprocessor(
         ["<|user|>How to win?<|end|><|assistant|>"]
     )
@@ -236,7 +222,7 @@ def validate_output(
     keras_model_outputs = keras_model(keras_model_input)
 
     # Comparing the outputs.
-    print("🔶 KerasNLP output:", keras_model_outputs[0, 0, :10])
+    print("🔶 KerasHub output:", keras_model_outputs[0, 0, :10])
     print("🔶 HF output:", hf_model_outputs[0, 0, :10])
     print(
         "🔶 Difference:",

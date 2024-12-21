@@ -28,9 +28,9 @@ class MistralCausalLM(CausalLM):
 
     Args:
         backbone: A `keras_hub.models.MistralBackbone` instance.
-        preprocessor: A `keras_hub.models.MistralCausalLMPreprocessor` or `None`.
-            If `None`, this model will not apply preprocessing, and inputs
-            should be preprocessed before calling the model.
+        preprocessor: A `keras_hub.models.MistralCausalLMPreprocessor` or
+            `None`. If `None`, this model will not apply preprocessing, and
+            inputs should be preprocessed before calling the model.
     """
 
     backbone_cls = MistralBackbone
@@ -42,7 +42,9 @@ class MistralCausalLM(CausalLM):
         self.preprocessor = preprocessor
 
         # === Functional Model ===
-        inputs = backbone.inputs
+        # This must be "backbone.input" i.e. the full input structure,
+        # rather than "backbone.inputs" which is the flattened list of inputs.
+        inputs = backbone.input
         hidden_states = backbone(inputs)
         outputs = backbone.token_embedding(hidden_states, reverse=True)
         super().__init__(

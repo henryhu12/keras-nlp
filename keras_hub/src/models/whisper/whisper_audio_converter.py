@@ -39,7 +39,7 @@ class WhisperAudioConverter(AudioConverter):
     audio_tensor = tf.ones((8000,), dtype="float32")
 
     # Compute the log-mel spectrogram.
-    audio_converter = keras_hub.models.WhisperAudioConverter.from_preset(
+    audio_converter = keras_hub.layers.WhisperAudioConverter.from_preset(
         "whisper_base_en",
     )
     audio_converter(audio_tensor)
@@ -172,9 +172,7 @@ class WhisperAudioConverter(AudioConverter):
         )
 
         def tf_log10(x):
-            """
-            Computes log base 10 of input tensor using TensorFlow's natural log operator.
-            """
+            """Computes log base 10 of input tensor using TensorFlow."""
             numerator = tf.math.log(x)
             denominator = tf.math.log(tf.constant(10, dtype=numerator.dtype))
             return numerator / denominator

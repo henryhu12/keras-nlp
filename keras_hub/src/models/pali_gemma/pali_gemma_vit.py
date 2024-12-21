@@ -12,7 +12,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.image_size = image_size
         self.patch_size = patch_size
@@ -61,7 +61,7 @@ class PaliGemmaVitEmbeddings(keras.layers.Layer):
 
 class PaliGemmaVitAttention(keras.layers.Layer):
     """
-    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py # noqa: E501
+    Adapted from https://github.com/huggingface/transformers/blob/main/src/transformers/models/clip/modeling_clip.py
     """
 
     def __init__(
@@ -72,7 +72,7 @@ class PaliGemmaVitAttention(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
 
         self.hidden_dim = hidden_dim
         self.num_heads = num_heads
@@ -120,7 +120,7 @@ class PaliGemmaVitAttention(keras.layers.Layer):
 
     def _transpose_for_scores(self, tensor, batch_size):
         """
-        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252 # noqa: E501
+        Adapted from https://github.com/huggingface/transformers/blob/8e164c5400b7b413c7b8fb32e35132001effc970/src/transformers/models/bert/modeling_tf_bert.py#L252
         """
         # [batch_size, seq_len, all_head_dim] ->
         # [batch_size, seq_len, num_heads, head_dim]
@@ -282,7 +282,7 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
         dtype=None,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(dtype=dtype, **kwargs)
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.num_heads = num_heads
@@ -311,25 +311,26 @@ class PaliGemmaVitEncoder(keras.layers.Layer):
             for i in range(self.num_layers)
         ]
 
-    def build(self, input_shape):
-        self.vision_embeddings.build(input_shape)
+    def build(self, inputs_shape):
+        self.vision_embeddings.build(inputs_shape)
         for block in self.resblocks:
             block.build([None, None, self.hidden_dim])
         self.encoder_layer_norm.build([None, None, self.hidden_dim])
         self.built = True
 
-    def call(
-        self,
-        x,
-        mask=None,
-    ):
-        x = self.vision_embeddings(x)
+    def call(self, inputs, mask=None):
+        x = self.vision_embeddings(inputs)
         for block in self.resblocks:
             x = block(x, mask=mask)
         x = self.encoder_layer_norm(x)
         return x
 
     def compute_output_shape(self, inputs_shape):
+        if inputs_shape is None:
+            # Fix the compatibility issue with Keras 3.1 where
+            # `compute_output_spec` fails to propagate `inputs_shape`
+            # correctly, causing it to be `None`.
+            inputs_shape = [None, None, None]
         return [inputs_shape[0], inputs_shape[1], self.hidden_dim]
 
     def get_config(self):
@@ -410,8 +411,6 @@ class PaliGemmaVit(keras.Model):
     Args:
         image_size: int. The height/width of the image. Both height and width is
             expected to be the same.
-        include_rescaling: bool. If true, the image input will be rescaled from
-            the range `[0, 255]`, to the range `[0, 1]`.
         patch_size: int. The size of each square patch in the input image.
         num_heads: int. The number of attention heads for the vision(image)
             transformer encoder.
@@ -452,7 +451,6 @@ class PaliGemmaVit(keras.Model):
         num_layers,
         intermediate_dim,
         num_classes,
-        include_rescaling=True,
         pooling=None,
         classifier_activation=None,
         dtype=None,
@@ -463,14 +461,6 @@ class PaliGemmaVit(keras.Model):
             shape=(image_size, image_size, 3), name="images"
         )
         x = image_input  # Intermediate result.
-        # TODO we have moved this rescaling to preprocessing layers for most
-        # models. We should consider removing it here, though it would break
-        # compatibility.
-        if include_rescaling:
-            rescaling = keras.layers.Rescaling(
-                scale=1.0 / 127.5, offset=-1.0, name="rescaling"
-            )
-            x = rescaling(image_input)
         x = PaliGemmaVitEncoder(
             hidden_dim=hidden_dim,
             num_layers=num_layers,
@@ -520,7 +510,6 @@ class PaliGemmaVit(keras.Model):
         self.pooling = pooling
         self.num_classes = num_classes
         self.image_size = image_size
-        self.include_rescaling = include_rescaling
         self.patch_size = patch_size
         self.classifier_activation = keras.activations.get(
             classifier_activation
@@ -549,7 +538,6 @@ class PaliGemmaVit(keras.Model):
                     self.classifier_activation
                 ),
                 "image_size": self.image_size,
-                "include_rescaling": self.include_rescaling,
                 "patch_size": self.patch_size,
             }
         )

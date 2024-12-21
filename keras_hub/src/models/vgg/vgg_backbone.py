@@ -20,25 +20,14 @@ class VGGBackbone(Backbone):
       stackwise_num_filters: list of ints, filter size for convolutional
             blocks per VGG block. For both VGG16 and VGG19 this is [
             64, 128, 256, 512, 512].
-      image_shape: tuple, optional shape tuple, defaults to (224, 224, 3).
-      pooling: bool, Optional pooling mode for feature extraction
-        when `include_top` is `False`.
-        - `None` means that the output of the model will be
-            the 4D tensor output of the
-            last convolutional block.
-        - `avg` means that global average pooling
-            will be applied to the output of the
-            last convolutional block, and thus
-            the output of the model will be a 2D tensor.
-        - `max` means that global max pooling will
-            be applied.
+      image_shape: tuple, optional shape tuple, defaults to (None, None, 3).
 
     Examples:
     ```python
     input_data = np.ones((2, 224, 224, 3), dtype="float32")
 
     # Pretrained VGG backbone.
-    model = keras_hub.models.VGGBackbone.from_preset("vgg16")
+    model = keras_hub.models.VGGBackbone.from_preset("vgg_16_imagenet")
     model(input_data)
 
     # Randomly initialized VGG backbone with a custom config.
@@ -46,7 +35,6 @@ class VGGBackbone(Backbone):
         stackwise_num_repeats = [2, 2, 3, 3, 3],
         stackwise_num_filters = [64, 128, 256, 512, 512],
         image_shape = (224, 224, 3),
-        pooling = "avg",
     )
     model(input_data)
     ```
@@ -56,16 +44,14 @@ class VGGBackbone(Backbone):
         self,
         stackwise_num_repeats,
         stackwise_num_filters,
-        image_shape=(224, 224, 3),
-        pooling="avg",
+        image_shape=(None, None, 3),
         **kwargs,
     ):
-
         # === Functional Model ===
         img_input = keras.layers.Input(shape=image_shape)
         x = img_input
 
-        for stack_index in range(len(stackwise_num_repeats) - 1):
+        for stack_index in range(len(stackwise_num_repeats)):
             x = apply_vgg_block(
                 x=x,
                 num_layers=stackwise_num_repeats[stack_index],
@@ -76,10 +62,6 @@ class VGGBackbone(Backbone):
                 max_pool=True,
                 name=f"block{stack_index + 1}",
             )
-        if pooling == "avg":
-            x = layers.GlobalAveragePooling2D()(x)
-        elif pooling == "max":
-            x = layers.GlobalMaxPooling2D()(x)
 
         super().__init__(inputs=img_input, outputs=x, **kwargs)
 
@@ -87,14 +69,12 @@ class VGGBackbone(Backbone):
         self.stackwise_num_repeats = stackwise_num_repeats
         self.stackwise_num_filters = stackwise_num_filters
         self.image_shape = image_shape
-        self.pooling = pooling
 
     def get_config(self):
         return {
             "stackwise_num_repeats": self.stackwise_num_repeats,
             "stackwise_num_filters": self.stackwise_num_filters,
             "image_shape": self.image_shape,
-            "pooling": self.pooling,
         }
 
 

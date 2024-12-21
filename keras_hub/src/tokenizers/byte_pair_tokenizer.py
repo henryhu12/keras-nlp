@@ -43,7 +43,11 @@ SPLIT_PATTERN_1 = (
 SPLIT_PATTERN_1 = SPLIT_PATTERN_1.replace(
     "{special_spaces}", SPECIAL_WHITESPACES
 )
-SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
+
+# The pattern " \t\r\f\v" is the same as \s "all spaces" but without the \n.
+# Multiple \n\n\n in sequence must not be split for Llama3.
+# SPLIT_PATTERN_2 = rf"""[\s६{SPECIAL_WHITESPACES}]$"""
+SPLIT_PATTERN_2 = rf"""[ \t\r\f\v६{SPECIAL_WHITESPACES}]$"""
 
 
 def create_alts_for_unsplittable_tokens(unsplittable_tokens):
@@ -196,8 +200,8 @@ class BytePairTokenizer(tokenizer.Tokenizer):
     """Bype-pair encoding tokenizer layer.
 
     This BPE tokenizer provides the same functionality as the official GPT-2
-    tokenizer. Given the same `vocabulary` which maps tokens to ids, and `merges`
-    which describes BPE merge rules, it should provide the same output
+    tokenizer. Given the same `vocabulary` which maps tokens to ids, and
+    `merges` which describes BPE merge rules, it should provide the same output
     as OpenAI implementation (https://github.com/openai/gpt-2/blob/master/src/encoder.py).
     Different from OpenAI, this implementation is graph-compatible, so you can
     use it within a `tf.data` pipeline.

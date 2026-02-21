@@ -651,6 +651,18 @@ from keras_hub.src.models.sam.sam_image_segmenter import (
 from keras_hub.src.models.sam.sam_image_segmenter_preprocessor import (
     SAMImageSegmenterPreprocessor as SAMImageSegmenterPreprocessor,
 )
+from keras_hub.src.models.sam3.sam3_pc_backbone import (
+    SAM3PromptableConceptBackbone as SAM3PromptableConceptBackbone,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter import (
+    SAM3PromptableConceptImageSegmenter as SAM3PromptableConceptImageSegmenter,
+)
+from keras_hub.src.models.sam3.sam3_pc_image_segmenter_preprocessor import (
+    SAM3PromptableConceptImageSegmenterPreprocessor as SAM3PromptableConceptImageSegmenterPreprocessor,
+)
+from keras_hub.src.models.sam3.sam3_tokenizer import (
+    SAM3Tokenizer as SAM3Tokenizer,
+)
 from keras_hub.src.models.segformer.segformer_backbone import (
     SegFormerBackbone as SegFormerBackbone,
 )
@@ -753,6 +765,12 @@ from keras_hub.src.models.vgg.vgg_image_classifier import (
 )
 from keras_hub.src.models.vgg.vgg_image_classifier_preprocessor import (
     VGGImageClassifierPreprocessor as VGGImageClassifierPreprocessor,
+)
+from keras_hub.src.models.video_prism.video_prism_backbone import (
+    VideoPrismBackbone as VideoPrismBackbone,
+)
+from keras_hub.src.models.video_prism.video_prism_tokenizer import (
+    VideoPrismTokenizer as VideoPrismTokenizer,
 )
 from keras_hub.src.models.vit.vit_backbone import ViTBackbone as ViTBackbone
 from keras_hub.src.models.vit.vit_image_classifier import (
